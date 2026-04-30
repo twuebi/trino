@@ -528,6 +528,11 @@ following properties:
   - Enable view endpoints. Defaults to `true`.
 * - `iceberg.rest-catalog.signing-name`
   - AWS SigV4 signing service name. Defaults to `execute-api`.
+* - `iceberg.rest-catalog.user-iam-role-template`
+  - Templated IAM role ARN assumed for per-user SigV4 signing of Iceberg REST
+    catalog requests. The string `${USER}` is required and is replaced with the
+    current session's username when assuming the role. When unset, the static
+    role from `s3.iam-role` is used for all users.
 * - `iceberg.rest-catalog.google-project-id`
   - Google Cloud project name. This property must be set when `iceberg.rest-catalog.security` 
     config property is set to `GOOGLE`. Example: `development-123456`.

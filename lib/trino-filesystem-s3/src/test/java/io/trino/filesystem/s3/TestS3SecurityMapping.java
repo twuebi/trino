@@ -303,6 +303,28 @@ public class TestS3SecurityMapping
                 path("s3://somebucket/"),
                 MappingResult.iamRole("arn:aws:iam::1234567891012:role/default")
                         .withRoleSessionName("iam-trino-session"));
+
+        // ${USER} placeholder is substituted in iamRole and roleSessionName
+        assertMapping(
+                provider,
+                path("s3://peruser/data/"),
+                MappingResult.iamRole("arn:aws:iam::123456789101:role/testuser")
+                        .withRoleSessionName("testuser-session"));
+
+        // user-supplied resolved role matches the templated default role
+        assertMapping(
+                provider,
+                path("s3://peruser/data/")
+                        .withExtraCredentialIamRole("arn:aws:iam::123456789101:role/testuser"),
+                MappingResult.iamRole("arn:aws:iam::123456789101:role/testuser")
+                        .withRoleSessionName("testuser-session"));
+
+        // user-supplied role for a templated default that is neither resolved nor in allowed list
+        assertMappingFails(
+                provider,
+                path("s3://peruser/data/")
+                        .withExtraCredentialIamRole("arn:aws:iam::123456789101:role/other"),
+                "Selected S3 role is not allowed: arn:aws:iam::123456789101:role/other");
     }
 
     @Test

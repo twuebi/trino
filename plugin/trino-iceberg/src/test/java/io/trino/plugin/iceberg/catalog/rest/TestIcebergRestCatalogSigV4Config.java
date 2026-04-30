@@ -14,6 +14,7 @@
 package io.trino.plugin.iceberg.catalog.rest;
 
 import com.google.common.collect.ImmutableMap;
+import jakarta.validation.constraints.AssertTrue;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -21,6 +22,8 @@ import java.util.Map;
 import static io.airlift.configuration.testing.ConfigAssertions.assertFullMapping;
 import static io.airlift.configuration.testing.ConfigAssertions.assertRecordedDefaults;
 import static io.airlift.configuration.testing.ConfigAssertions.recordDefaults;
+import static io.airlift.testing.ValidationAssertions.assertFailsValidation;
+import static io.airlift.testing.ValidationAssertions.assertValidates;
 
 final class TestIcebergRestCatalogSigV4Config
 {
@@ -28,7 +31,8 @@ final class TestIcebergRestCatalogSigV4Config
     void testDefaults()
     {
         assertRecordedDefaults(recordDefaults(IcebergRestCatalogSigV4Config.class)
-                .setSigningName("execute-api"));
+                .setSigningName("execute-api")
+                .setUserIamRoleTemplate(null));
     }
 
     @Test
@@ -36,11 +40,26 @@ final class TestIcebergRestCatalogSigV4Config
     {
         Map<String, String> properties = ImmutableMap.<String, String>builder()
                 .put("iceberg.rest-catalog.signing-name", "glue")
+                .put("iceberg.rest-catalog.user-iam-role-template", "arn:aws:iam::123456789:role/trino/${USER}")
                 .buildOrThrow();
 
         IcebergRestCatalogSigV4Config expected = new IcebergRestCatalogSigV4Config()
-                .setSigningName("glue");
+                .setSigningName("glue")
+                .setUserIamRoleTemplate("arn:aws:iam::123456789:role/trino/${USER}");
 
         assertFullMapping(properties, expected);
+    }
+
+    @Test
+    void testUserIamRoleTemplateRequiresUserPlaceholder()
+    {
+        assertValidates(new IcebergRestCatalogSigV4Config());
+        assertValidates(new IcebergRestCatalogSigV4Config()
+                .setUserIamRoleTemplate("arn:aws:iam::123456789:role/trino/${USER}"));
+        assertFailsValidation(
+                new IcebergRestCatalogSigV4Config().setUserIamRoleTemplate("arn:aws:iam::123456789:role/trino/static"),
+                "userIamRoleTemplateValid",
+                "iceberg.rest-catalog.user-iam-role-template must contain ${USER}",
+                AssertTrue.class);
     }
 }

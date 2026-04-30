@@ -13,9 +13,22 @@
  */
 package io.trino.plugin.iceberg.catalog.rest;
 
+import com.google.common.collect.ImmutableMap;
+
 import java.util.Map;
 
 public interface SecurityProperties
 {
     Map<String, String> get();
+
+    /**
+     * Per-user property overrides merged into {@link org.apache.iceberg.catalog.SessionCatalog.SessionContext}
+     * properties so Iceberg's contextual AuthSession can authenticate as the Trino session user.
+     * The default implementation returns an empty map; implementations that support per-user
+     * authentication override this method.
+     */
+    default Map<String, String> sessionOverrides(String user)
+    {
+        return ImmutableMap.of();
+    }
 }

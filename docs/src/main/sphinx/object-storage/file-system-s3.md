@@ -169,7 +169,9 @@ The security mapping must provide one or more configuration settings:
 - `iamRole`: IAM role to use if no user provided role is specified as an
   extra credential. This overrides any globally configured IAM role. This role
   is allowed to be specified as an extra credential, although specifying it
-  explicitly has no effect.
+  explicitly has no effect. If `iamRole` includes the string `${USER}`, then
+  the `${USER}` portion is replaced with the current session's username,
+  allowing per-user role assumption from a single mapping entry.
 - `roleSessionName`: Optional role session name to use with `iamRole`. This can only
   be used when `iamRole` is specified. If `roleSessionName` includes the string
   `${USER}`, then the `${USER}` portion of the string is replaced with the

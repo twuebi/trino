@@ -99,6 +99,11 @@
       "roleSessionName": "iam-trino-session"
     },
     {
+      "prefix": "s3://peruser/",
+      "iamRole": "arn:aws:iam::123456789101:role/${USER}",
+      "roleSessionName": "${USER}-session"
+    },
+    {
       "useClusterDefault": "false",
       "iamRole": "arn:aws:iam::123456789101:role/default"
     }

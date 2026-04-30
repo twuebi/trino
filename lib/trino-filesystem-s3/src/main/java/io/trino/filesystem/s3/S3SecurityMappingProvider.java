@@ -72,7 +72,7 @@ final class S3SecurityMappingProvider
         return Optional.of(new S3SecurityMappingResult(
                 mapping.credentials(),
                 selectRole(mapping, identity),
-                mapping.roleSessionName().map(name -> name.replace("${USER}", identity.getUser())),
+                mapping.roleSessionName().map(name -> substituteUser(name, identity)),
                 selectKmsKeyId(mapping, identity),
                 getSseCustomerKey(mapping, identity),
                 mapping.endpoint(),
@@ -81,20 +81,21 @@ final class S3SecurityMappingProvider
 
     private Optional<String> selectRole(S3SecurityMapping mapping, ConnectorIdentity identity)
     {
+        Optional<String> defaultRole = mapping.iamRole().map(role -> substituteUser(role, identity));
         Optional<String> optionalSelected = getRoleFromExtraCredential(identity);
 
         if (optionalSelected.isEmpty()) {
-            if (!mapping.allowedIamRoles().isEmpty() && mapping.iamRole().isEmpty()) {
+            if (!mapping.allowedIamRoles().isEmpty() && defaultRole.isEmpty()) {
                 throw new AccessDeniedException("No S3 role selected and mapping has no default role");
             }
-            verify(mapping.iamRole().isPresent() || mapping.credentials().isPresent(), "mapping must have role or credential");
-            return mapping.iamRole();
+            verify(defaultRole.isPresent() || mapping.credentials().isPresent(), "mapping must have role or credential");
+            return defaultRole;
         }
 
         String selected = optionalSelected.get();
 
         // selected role must match default or be allowed
-        if (!selected.equals(mapping.iamRole().orElse(null)) &&
+        if (!selected.equals(defaultRole.orElse(null)) &&
                 !mapping.allowedIamRoles().contains(selected)) {
             throw new AccessDeniedException("Selected S3 role is not allowed: " + selected);
         }
@@ -167,5 +168,10 @@ final class S3SecurityMappingProvider
         return refreshPeriod
                 .map(refresh -> memoizeWithExpiration(supplier::get, refresh.toMillis(), MILLISECONDS))
                 .orElseGet(() -> memoize(supplier::get));
+    }
+
+    private static String substituteUser(String value, ConnectorIdentity identity)
+    {
+        return value.replace("${USER}", identity.getUser());
     }
 }

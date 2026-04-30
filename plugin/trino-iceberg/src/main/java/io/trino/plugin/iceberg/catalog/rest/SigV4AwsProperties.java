@@ -20,6 +20,7 @@ import io.trino.filesystem.s3.S3FileSystemConfig;
 import java.util.Map;
 import java.util.Optional;
 
+import static io.trino.plugin.iceberg.catalog.rest.IcebergRestCatalogSigV4Config.USER_PLACEHOLDER;
 import static io.trino.plugin.iceberg.catalog.rest.SigV4AwsCredentialProvider.AWS_IAM_ROLE;
 import static io.trino.plugin.iceberg.catalog.rest.SigV4AwsCredentialProvider.AWS_IAM_ROLE_SESSION_NAME;
 import static io.trino.plugin.iceberg.catalog.rest.SigV4AwsCredentialProvider.AWS_ROLE_EXTERNAL_ID;
@@ -52,10 +53,13 @@ public class SigV4AwsProperties
     private static final String CLIENT_CREDENTIAL_AWS_IAM_ROLE_SESSION_NAME = CLIENT_CREDENTIAL_PROVIDER_PREFIX + AWS_IAM_ROLE_SESSION_NAME;
 
     private final Map<String, String> properties;
+    private final Optional<String> userIamRoleTemplate;
 
     @Inject
     public SigV4AwsProperties(IcebergRestCatalogSigV4Config sigV4Config, S3FileSystemConfig s3Config)
     {
+        this.userIamRoleTemplate = sigV4Config.getUserIamRoleTemplate();
+
         ImmutableMap.Builder<String, String> builder = ImmutableMap.<String, String>builder()
                 .put("rest.auth.type", "sigv4")
                 .put(REST_SIGNING_NAME, sigV4Config.getSigningName())
@@ -88,5 +92,15 @@ public class SigV4AwsProperties
     public Map<String, String> get()
     {
         return properties;
+    }
+
+    @Override
+    public Map<String, String> sessionOverrides(String user)
+    {
+        requireNonNull(user, "user is null");
+        if (userIamRoleTemplate.isEmpty()) {
+            return ImmutableMap.of();
+        }
+        return ImmutableMap.of(CLIENT_CREDENTIAL_AWS_IAM_ROLE, userIamRoleTemplate.get().replace(USER_PLACEHOLDER, user));
     }
 }

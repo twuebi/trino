@@ -24,6 +24,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.StsClientBuilder;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
+import software.amazon.awssdk.utils.SdkAutoCloseable;
 
 import java.net.URI;
 import java.util.Map;
@@ -106,6 +107,13 @@ public class SigV4AwsCredentialProvider
     public CompletableFuture<AwsCredentialsIdentity> resolveIdentity(ResolveIdentityRequest request)
     {
         return delegate.resolveIdentity(request);
+    }
+
+    public void close()
+    {
+        if (delegate instanceof SdkAutoCloseable closeable) {
+            closeable.close();
+        }
     }
 
     private static Optional<AwsCredentialsProvider> createStaticCredentialsProvider(String accessKey, String secretKey)

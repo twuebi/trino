@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.iceberg.catalog.rest;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.cache.Cache;
@@ -122,6 +123,7 @@ public class TrinoRestCatalog
     private final TypeManager typeManager;
     private final Security security;
     private final SessionType sessionType;
+    private final SecurityProperties securityProperties;
     private final Map<String, String> credentials;
     private final boolean nestedNamespaceEnabled;
     private final String trinoVersion;
@@ -141,6 +143,7 @@ public class TrinoRestCatalog
             CatalogName catalogName,
             Security security,
             SessionType sessionType,
+            SecurityProperties securityProperties,
             Map<String, String> credentials,
             boolean nestedNamespaceEnabled,
             String trinoVersion,
@@ -156,6 +159,7 @@ public class TrinoRestCatalog
         this.catalogName = requireNonNull(catalogName, "catalogName is null");
         this.security = requireNonNull(security, "security is null");
         this.sessionType = requireNonNull(sessionType, "sessionType is null");
+        this.securityProperties = requireNonNull(securityProperties, "securityProperties is null");
         this.credentials = ImmutableMap.copyOf(requireNonNull(credentials, "credentials is null"));
         this.nestedNamespaceEnabled = nestedNamespaceEnabled;
         this.trinoVersion = requireNonNull(trinoVersion, "trinoVersion is null");
@@ -876,21 +880,23 @@ public class TrinoRestCatalog
         replaceViewVersion.commit();
     }
 
-    private SessionCatalog.SessionContext convert(ConnectorSession session)
+    @VisibleForTesting
+    SessionCatalog.SessionContext convert(ConnectorSession session)
     {
+        Map<String, String> sessionOverrides = securityProperties.sessionOverrides(session.getUser());
         return switch (sessionType) {
-            case NONE -> new SessionContext(randomUUID().toString(), null, credentials, ImmutableMap.of(), session.getIdentity());
+            case NONE -> new SessionContext(randomUUID().toString(), null, credentials, sessionOverrides, session.getIdentity());
             case USER -> {
                 String sessionId = format("%s-%s", session.getUser(), session.getSource().orElse("default"));
 
-                Map<String, String> properties = ImmutableMap.of(
+                Map<String, String> baseProperties = ImmutableMap.of(
                         "user", session.getUser(),
                         "source", session.getSource().orElse(""),
                         "trinoCatalog", catalogName.toString(),
                         "trinoVersion", trinoVersion);
 
                 Map<String, Object> claims = ImmutableMap.<String, Object>builder()
-                        .putAll(properties)
+                        .putAll(baseProperties)
                         .buildOrThrow();
 
                 String subjectJwt = new DefaultJwtBuilder()
@@ -901,12 +907,17 @@ public class TrinoRestCatalog
                         .json(new JacksonSerializer<>())
                         .compact();
 
-                Map<String, String> credentials = ImmutableMap.<String, String>builder()
+                Map<String, String> sessionCredentials = ImmutableMap.<String, String>builder()
                         .putAll(session.getIdentity().getExtraCredentials())
                         .put(OAuth2Properties.JWT_TOKEN_TYPE, subjectJwt)
                         .buildOrThrow();
 
-                yield new SessionCatalog.SessionContext(sessionId, session.getUser(), credentials, properties, session.getIdentity());
+                Map<String, String> sessionProperties = ImmutableMap.<String, String>builder()
+                        .putAll(baseProperties)
+                        .putAll(sessionOverrides)
+                        .buildOrThrow();
+
+                yield new SessionCatalog.SessionContext(sessionId, session.getUser(), sessionCredentials, sessionProperties, session.getIdentity());
             }
         };
     }

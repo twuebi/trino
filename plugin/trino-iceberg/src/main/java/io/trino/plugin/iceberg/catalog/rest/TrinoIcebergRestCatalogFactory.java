@@ -166,6 +166,7 @@ public class TrinoIcebergRestCatalogFactory
                 catalogName,
                 security,
                 sessionType,
+                securityProperties,
                 credentials,
                 nestedNamespaceEnabled,
                 trinoVersion,

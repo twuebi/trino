@@ -23,12 +23,14 @@ import io.trino.plugin.iceberg.TableStatisticsWriter;
 import io.trino.plugin.iceberg.catalog.BaseTrinoCatalogTest;
 import io.trino.plugin.iceberg.catalog.TrinoCatalog;
 import io.trino.plugin.iceberg.catalog.rest.IcebergRestCatalogConfig.Security;
+import io.trino.plugin.iceberg.catalog.rest.IcebergRestCatalogConfig.SessionType;
 import io.trino.spi.NodeVersion;
 import io.trino.spi.TrinoException;
 import io.trino.spi.catalog.CatalogName;
 import io.trino.spi.connector.ConnectorMetadata;
 import io.trino.spi.security.PrincipalType;
 import io.trino.spi.security.TrinoPrincipal;
+import org.apache.iceberg.catalog.SessionCatalog;
 import org.apache.iceberg.rest.DelegatingRestSessionCatalog;
 import org.apache.iceberg.rest.RESTSessionCatalog;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,7 @@ import static io.trino.hdfs.HdfsTestUtils.HDFS_FILE_SYSTEM_FACTORY;
 import static io.trino.metastore.TableInfo.ExtendedRelationType.OTHER_VIEW;
 import static io.trino.plugin.iceberg.IcebergTestUtils.TABLE_STATISTICS_READER;
 import static io.trino.plugin.iceberg.catalog.rest.IcebergRestCatalogConfig.SessionType.NONE;
+import static io.trino.plugin.iceberg.catalog.rest.IcebergRestCatalogConfig.SessionType.USER;
 import static io.trino.plugin.iceberg.catalog.rest.RestCatalogTestUtils.backendCatalog;
 import static io.trino.plugin.iceberg.delete.DeletionVectorWriter.UNSUPPORTED_DELETION_VECTOR_WRITER;
 import static io.trino.sql.planner.TestingPlannerContext.PLANNER_CONTEXT;
@@ -82,6 +85,16 @@ public class TestTrinoRestCatalog
     private static TrinoRestCatalog createTrinoRestCatalog(boolean useUniqueTableLocations, Map<String, String> properties)
             throws IOException
     {
+        return createTrinoRestCatalog(useUniqueTableLocations, properties, NONE, ImmutableMap::of);
+    }
+
+    private static TrinoRestCatalog createTrinoRestCatalog(
+            boolean useUniqueTableLocations,
+            Map<String, String> properties,
+            SessionType sessionType,
+            SecurityProperties securityProperties)
+            throws IOException
+    {
         Path warehouseLocation = Files.createTempDirectory(null);
         warehouseLocation.toFile().deleteOnExit();
 
@@ -98,7 +111,8 @@ public class TestTrinoRestCatalog
                 restSessionCatalog,
                 new CatalogName(catalogName),
                 Security.NONE,
-                NONE,
+                sessionType,
+                securityProperties,
                 ImmutableMap.of(),
                 false,
                 "test",
@@ -162,6 +176,57 @@ public class TestTrinoRestCatalog
         finally {
             catalog.dropNamespace(SESSION, namespace);
         }
+    }
+
+    @Test
+    public void testConvertAppliesSessionOverridesForNoneSessionType()
+            throws IOException
+    {
+        TrinoRestCatalog catalog = createTrinoRestCatalog(
+                false,
+                ImmutableMap.of(),
+                NONE,
+                userSecurityProperties("test.role", "arn:role/"));
+
+        SessionCatalog.SessionContext context = catalog.convert(SESSION);
+
+        assertThat(context.properties())
+                .containsExactly(Map.entry("test.role", "arn:role/" + SESSION.getUser()));
+    }
+
+    @Test
+    public void testConvertAppliesSessionOverridesForUserSessionType()
+            throws IOException
+    {
+        TrinoRestCatalog catalog = createTrinoRestCatalog(
+                false,
+                ImmutableMap.of(),
+                USER,
+                userSecurityProperties("test.role", "arn:role/"));
+
+        SessionCatalog.SessionContext context = catalog.convert(SESSION);
+
+        assertThat(context.properties())
+                .containsEntry("test.role", "arn:role/" + SESSION.getUser())
+                .containsEntry("user", SESSION.getUser());
+    }
+
+    private static SecurityProperties userSecurityProperties(String key, String valuePrefix)
+    {
+        return new SecurityProperties()
+        {
+            @Override
+            public Map<String, String> get()
+            {
+                return ImmutableMap.of();
+            }
+
+            @Override
+            public Map<String, String> sessionOverrides(String user)
+            {
+                return ImmutableMap.of(key, valuePrefix + user);
+            }
+        };
     }
 
     @Test

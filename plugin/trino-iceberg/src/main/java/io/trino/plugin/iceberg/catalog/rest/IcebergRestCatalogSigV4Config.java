@@ -15,12 +15,18 @@ package io.trino.plugin.iceberg.catalog.rest;
 
 import io.airlift.configuration.Config;
 import io.airlift.configuration.ConfigDescription;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import org.apache.iceberg.aws.AwsProperties;
 
+import java.util.Optional;
+
 public class IcebergRestCatalogSigV4Config
 {
+    static final String USER_PLACEHOLDER = "${USER}";
+
     private String signingName = AwsProperties.REST_SIGNING_NAME_DEFAULT;
+    private String userIamRoleTemplate;
 
     @NotNull
     public String getSigningName()
@@ -34,5 +40,24 @@ public class IcebergRestCatalogSigV4Config
     {
         this.signingName = signingName;
         return this;
+    }
+
+    public Optional<String> getUserIamRoleTemplate()
+    {
+        return Optional.ofNullable(userIamRoleTemplate);
+    }
+
+    @Config("iceberg.rest-catalog.user-iam-role-template")
+    @ConfigDescription("Templated IAM role ARN assumed for per-user SigV4 signing of Iceberg REST catalog requests. Must contain ${USER}.")
+    public IcebergRestCatalogSigV4Config setUserIamRoleTemplate(String userIamRoleTemplate)
+    {
+        this.userIamRoleTemplate = userIamRoleTemplate;
+        return this;
+    }
+
+    @AssertTrue(message = "iceberg.rest-catalog.user-iam-role-template must contain \\${USER}")
+    public boolean isUserIamRoleTemplateValid()
+    {
+        return userIamRoleTemplate == null || userIamRoleTemplate.contains(USER_PLACEHOLDER);
     }
 }
